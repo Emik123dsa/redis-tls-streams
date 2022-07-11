@@ -1,0 +1,7 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory '/home/emil/taxes/redis'
+cp -R --no-clobber .env.template .env.development
+cp -R --no-clobber .env.template .env
+yarn install --frozen-lockfile
+make: Leaving directory '/home/emil/taxes/redis'
+ 

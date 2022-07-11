@@ -1,0 +1,6 @@
+{
+  "watch": ["server/**/*.js", "shared/**/*.js", "utils/*.js"],
+  "ext": "js",
+  "ignore": [".git", "node_modules/**/node_modules"],
+  "execMap": {}
+}

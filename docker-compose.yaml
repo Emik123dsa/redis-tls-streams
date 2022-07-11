@@ -1,0 +1,181 @@
+version: "3.9"
+
+services:
+  client:
+    hostname: ${CLIENT_HOST}
+    image: node:18
+    container_name: client-web-app
+    working_dir: /app
+    volumes:
+      - type: bind
+        source: package.json
+        target: /app/package.json
+      - type: bind
+        source: client
+        target: /app/client
+      - type: bind
+        source: node_modules
+        target: /app/node_modules
+      - type: bind
+        source: shared
+        target: /app/shared
+      - type: bind
+        source: utils
+        target: /app/utils
+    pid: host
+    command: "yarn run start:client"
+    environment:
+      CLIENT_URL: http://${CLIENT_HOST}:${CLIENT_PORT}
+      BASE_DOMAIN: ${CLIENT_HOST}
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    stop_signal: SIGINT
+    tty: true
+    env_file: .env.development
+    stop_grace_period: 5s
+    ports:
+      - protocol: TCP
+        published: ${CLIENT_PORT}
+        target: 4200
+    expose:
+      - ${CLIENT_PORT}
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    cpu_shares: 4
+    networks:
+      - app-tier
+  server:
+    hostname: ${SERVER_HOST}
+    image: node:18
+    container_name: server-app
+    working_dir: /app
+    volumes:
+      - type: bind
+        source: node_modules
+        target: /app/node_modules
+      - type: bind
+        source: shared
+        target: /app/shared
+      - type: bind
+        source: logs
+        target: /app/logs
+      - type: bind
+        source: utils
+        target: /app/utils
+      - type: bind
+        source: tls
+        target: /tls
+      - type: bind
+        source: server
+        target: /app/server
+      - type: bind
+        source: package.json
+        target: /app/package.json
+      - type: bind
+        source: nodemon.json
+        target: /app/nodemon.json
+    pid: host
+    command: "yarn run start:server"
+    restart: unless-stopped
+    stop_signal: SIGINT
+    tty: true
+    env_file: .env.development
+    environment:
+      REDIS_URI: redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_TLS_PORT}
+    tmpfs:
+      - /tmp
+    stop_grace_period: 5s
+    ports:
+      - protocol: TCP
+        published: ${SERVER_PORT}
+        target: 3000
+      - protocol: TCP
+        published: ${SERVER_DEBUG_PORT}
+        target: 9229
+    expose:
+      - ${REDIS_PORT}
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    cpu_shares: 4
+    networks:
+      - app-tier
+  redis:
+    hostname: ${REDIS_HOST}
+    container_name: redis-tls
+    build:
+      context: .
+      dockerfile: docker/redis/Dockerfile
+      args:
+        REDIS_HOST: ${REDIS_HOST}
+        REDIS_PORT: ${REDIS_PORT}
+        REDIS_PASSWORD: ${REDIS_PASSWORD}
+        REDIS_TLS_ENABLED: ${REDIS_TLS_ENABLED}
+        REDIS_TLS_PORT: ${REDIS_TLS_PORT}
+        REDIS_TLS_CERT_FILE: ${REDIS_TLS_CERT_FILE}
+        REDIS_TLS_KEY_FILE: ${REDIS_TLS_KEY_FILE}
+        REDIS_TLS_CA_CERT_FILE: ${REDIS_TLS_CA_CERT_FILE}
+        REDIS_TLS_DH_PARAMS_FILE: ${REDIS_TLS_DH_PARAMS_FILE}
+        REDIS_AOF_ENABLED: ${REDIS_AOF_ENABLED}
+    pid: host
+    restart: unless-stopped
+    stop_signal: SIGTERM
+    tty: true
+    tmpfs:
+      - /tmp
+    stop_grace_period: 5s
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /var/lib/redis/
+    env_file:
+      - .env.development
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--tls",
+          "--cert",
+          "${REDIS_TLS_CERT_FILE}",
+          "--key",
+          "${REDIS_TLS_KEY_FILE}",
+          "--cacert",
+          "${REDIS_TLS_CA_CERT_FILE}",
+          "-p",
+          "${REDIS_TLS_PORT}",
+          "-a",
+          "${REDIS_PASSWORD}",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - protocol: TCP
+        published: ${REDIS_PORT}
+        target: 6379
+    expose:
+      - ${REDIS_PORT}
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    cpu_shares: 4
+    networks:
+      - app-tier
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  app-tier:
+    driver: bridge
